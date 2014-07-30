@@ -18,23 +18,22 @@ extern crate cgmath;
 extern crate noise;
 
 use std;
+use std::num;
 use std::ptr;
 use std::str;
 use std::vec;
 
 use gl::types::*;
 
-use cgmath::matrix::Matrix;
-use cgmath::matrix::Mat3;
-use cgmath::matrix::Mat4;
-use cgmath::matrix::ToMat4;
+use cgmath::angle;
+use cgmath::array::{Array1,Array2};
+use cgmath::matrix::{Matrix,Matrix4};
 use cgmath::vector::EuclideanVector;
 use cgmath::vector::Vector;
-use cgmath::vector::Vec2;
-use cgmath::vector::Vec3;
-use cgmath::vector::Vec4;
+use cgmath::vector::Vector2;
+use cgmath::vector::Vector3;
+use cgmath::vector::Vector4;
 use cgmath::angle::{rad, deg};
-use cgmath::ptr::Ptr;
 
 use check_gl;
 use chunk;
@@ -44,21 +43,49 @@ use chunk::Chunk;
 use CHUNK_SIZE;
 use texture;
 
-static LIGHT_DIRECTION : Vec3<f32> = Vec3 { x: 0.408248, y: -0.816497, z: 0.408248 };
+static LIGHT_DIRECTION : Vector3<f32> = Vector3 { x: 0.408248, y: -0.816497, z: 0.408248 };
 
 enum RenderMode {
     RenderModeNormal,
     RenderModeWireframe,
 }
 
+/// Create a matrix from a rotation around an arbitrary axis.
+pub fn from_axis_angle(axis: Vector3<GLfloat>, angle: angle::Rad<GLfloat>) -> Matrix4<GLfloat> {
+    let (s, c) = angle::sin_cos(angle);
+    let _1subc = num::one::<GLfloat>() - c;
+
+    Matrix4::new(
+        _1subc * axis.x * axis.x + c,
+        _1subc * axis.x * axis.y + s * axis.z,
+        _1subc * axis.x * axis.z - s * axis.y,
+        num::zero(),
+
+        _1subc * axis.x * axis.y - s * axis.z,
+        _1subc * axis.y * axis.y + c,
+        _1subc * axis.y * axis.z + s * axis.x,
+        num::zero(),
+
+        _1subc * axis.x * axis.z + s * axis.y,
+        _1subc * axis.y * axis.z - s * axis.x,
+        _1subc * axis.z * axis.z + c,
+        num::zero(),
+
+        num::zero(),
+        num::zero(),
+        num::zero(),
+        num::one(),
+    )
+}
+
 pub struct Renderer {
     res : Resources,
-    window_size : Vec2<u32>,
+    window_size : Vector2<u32>,
     mode : RenderMode,
 }
 
 impl Renderer {
-    pub fn new(window_size : Vec2<u32>) -> Renderer {
+    pub fn new(window_size : Vector2<u32>) -> Renderer {
         let res = match Resources::load() {
             Ok(x) => x,
             Err(msg) => fail!("Error loading graphics resources: {}", msg),
@@ -75,9 +102,9 @@ impl Renderer {
 
     pub fn render(
             &self,
-            chunks : &[&~chunk::Chunk],
-            camera_position : Vec3<f32>,
-            camera_angle : Vec2<f64>)
+            chunks : &[&Box<chunk::Chunk>],
+            camera_position : Vector3<f32>,
+            camera_angle : Vector2<f64>)
     {
         gl::Enable(gl::TEXTURE_2D);
         gl::Enable(gl::DEPTH_TEST);
@@ -120,13 +147,13 @@ impl Renderer {
             gl::Uniform3fv(self.res.uniform_light_direction, 1, LIGHT_DIRECTION.ptr());
         }
 
-        let camera_translation = Mat4::<f32>::from_cols(
-            Vec4::<f32>::unit_x(),
-            Vec4::<f32>::unit_y(),
-            Vec4::<f32>::unit_z(),
+        let camera_translation = Matrix4::<f32>::from_cols(
+            Vector4::<f32>::unit_x(),
+            Vector4::<f32>::unit_y(),
+            Vector4::<f32>::unit_z(),
             camera_position.mul_s(-1.0f32).extend(1.0f32));
-        let camera_rotation_x = Mat3::<f32>::from_angle_x(rad(camera_angle.x as f32)).to_mat4();
-        let camera_rotation_y = Mat3::<f32>::from_angle_y(rad(camera_angle.y as f32)).to_mat4();
+        let camera_rotation_x = from_axis_angle(Vector3::unit_x(), rad(camera_angle.x as f32));
+        let camera_rotation_y = from_axis_angle(Vector3::unit_y(), rad(camera_angle.y as f32));
         let camera = camera_rotation_x.mul_m(&camera_rotation_y).mul_m(&camera_translation);
 
         unsafe {
@@ -136,30 +163,30 @@ impl Renderer {
 
         let clip_transform = projection.mul_m(&camera);
 
-        let camera_chunk_coord = Vec3::new(camera_position.x as i64,
+        let camera_chunk_coord = Vector3::new(camera_position.x as i64,
                                            camera_position.y as i64,
                                            camera_position.z as i64).
                                        div_s(CHUNK_SIZE as i64);
 
         for chunk in chunks.iter() {
-            let mut chunk_pos = Vec3::new(chunk.coord.x as f32,
+            let mut chunk_pos = Vector3::new(chunk.coord.x as f32,
                                           chunk.coord.y as f32,
                                           chunk.coord.z as f32).
                                       mul_s(CHUNK_SIZE as f32);
 
             /* Calculate drop due to surface curvature */
             static planet_radius : f32 = 6371000.0f32 / 5000.0f32;
-            let horiz_dist = (Vec3 { x: camera_position.x, y: 0.0f32, z: camera_position.z }).
-                sub_v(&Vec3::new(chunk_pos.x, 0.0f32, chunk_pos.z)).length();
+            let horiz_dist = (Vector3 { x: camera_position.x, y: 0.0f32, z: camera_position.z }).
+                sub_v(&Vector3::new(chunk_pos.x, 0.0f32, chunk_pos.z)).length();
             let adj_horiz_dist = (horiz_dist - 100f32).max(0.0f32);
-            let drop = planet_radius - (planet_radius.powf(&2.0f32) - adj_horiz_dist.powf(&2.0f32)).sqrt();
+            let drop = planet_radius - (planet_radius.powf(2.0f32) - adj_horiz_dist.powf(2.0f32)).sqrt();
             chunk_pos.y -= drop;
 
             if view_frustum_cull(&clip_transform, &chunk_pos.extend(0.0f32)) {
                 continue;
             }
 
-            let mesh : &Mesh = chunk.mesh;
+            let mesh : &Mesh = &*chunk.mesh;
             self.bind_mesh(mesh);
 
             unsafe {
@@ -181,7 +208,7 @@ impl Renderer {
                         gl::TRIANGLES,
                         count as i32,
                         gl::UNSIGNED_INT,
-                        std::cast::transmute(
+                        std::mem::transmute(
                             offset *
                             std::mem::size_of::<GLuint>()));
                 }
@@ -212,7 +239,7 @@ impl Renderer {
         };
     }
 
-    pub fn set_window_size(&mut self, window_size: Vec2<u32>) {
+    pub fn set_window_size(&mut self, window_size: Vector2<u32>) {
         self.window_size = window_size;
     }
 
@@ -227,7 +254,7 @@ impl Renderer {
                 gl::VertexAttribPointer(self.res.attr_blocktype, 1, gl::FLOAT,
                                         gl::FALSE as GLboolean,
                                         std::mem::size_of::<mesh::VertexData>() as GLint,
-                                        std::cast::transmute(offset_of!(mesh::VertexData, blocktype)));
+                                        std::mem::transmute(offset_of!(mesh::VertexData, blocktype)));
 
                 ebo.bind();
             },
@@ -253,22 +280,22 @@ struct Resources {
 }
 
 impl Resources {
-    fn load() -> Result<Resources, ~str> {
+    fn load() -> Result<Resources, String> {
         let vs_src = std::io::fs::File::open_mode(&std::path::Path::new("shaders/main.vs.glsl"), std::io::Open, std::io::Read).unwrap().read_to_end().unwrap();
-        let vs = match compile_shader(vs_src, gl::VERTEX_SHADER) {
+        let vs = match compile_shader(vs_src.slice(0, vs_src.len()), gl::VERTEX_SHADER) {
             Ok(vs) => vs,
-            Err(msg) => { return Err("vertex shader " + msg) },
+            Err(msg) => { return Err(String::from_str("vertex shader ") + msg) },
         };
 
         let fs_src = std::io::fs::File::open_mode(&std::path::Path::new("shaders/main.fs.glsl"), std::io::Open, std::io::Read).unwrap().read_to_end().unwrap();
-        let fs = match compile_shader(fs_src, gl::FRAGMENT_SHADER) {
+        let fs = match compile_shader(fs_src.slice(0, fs_src.len()), gl::FRAGMENT_SHADER) {
             Ok(fs) => fs,
-            Err(msg) => { return Err("fragment shader " + msg) },
+            Err(msg) => { return Err(String::from_str("fragment shader ") + msg) },
         };
 
         let program = match link_program(vs, fs) {
             Ok(program) => program,
-            Err(msg) => { return Err("linking " + msg) },
+            Err(msg) => { return Err(String::from_str("linking ") + msg) },
         };
 
         let texture = texture::make_noise_texture();
@@ -313,21 +340,21 @@ impl Drop for Resources {
     }
 }
 
-fn view_frustum_cull(m : &Mat4<f32>, p: &Vec4<f32>) -> bool {
+fn view_frustum_cull(m : &Matrix4<f32>, p: &Vector4<f32>) -> bool {
     static L : f32 = CHUNK_SIZE as f32;
 
-    static vertices : [Vec4<f32>, ..8] = [
-        Vec4 { x: 0.0, y: 0.0, z: L,   w: 1.0 }, /* front bottom left */
-        Vec4 { x: L,   y: 0.0, z: L,   w: 1.0 }, /* front bottom right */
-        Vec4 { x: 0.0, y: L,   z: L,   w: 1.0 }, /* front top left */
-        Vec4 { x: L,   y: L,   z: L,   w: 1.0 }, /* front top right */
-        Vec4 { x: L,   y: 0.0, z: 0.0, w: 1.0 }, /* back bottom right */
-        Vec4 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 }, /* back bottom left */
-        Vec4 { x: L,   y: L,   z: 0.0, w: 1.0 }, /* back top right */
-        Vec4 { x: 0.0, y: L,   z: 0.0, w: 1.0 }, /* back top left */
+    static vertices : [Vector4<f32>, ..8] = [
+        Vector4 { x: 0.0, y: 0.0, z: L,   w: 1.0 }, /* front bottom left */
+        Vector4 { x: L,   y: 0.0, z: L,   w: 1.0 }, /* front bottom right */
+        Vector4 { x: 0.0, y: L,   z: L,   w: 1.0 }, /* front top left */
+        Vector4 { x: L,   y: L,   z: L,   w: 1.0 }, /* front top right */
+        Vector4 { x: L,   y: 0.0, z: 0.0, w: 1.0 }, /* back bottom right */
+        Vector4 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 }, /* back bottom left */
+        Vector4 { x: L,   y: L,   z: 0.0, w: 1.0 }, /* back top right */
+        Vector4 { x: 0.0, y: L,   z: 0.0, w: 1.0 }, /* back top left */
     ];
 
-    let clip_vertices: ~[Vec4<f32>] = vertices.iter().map(|v| m.mul_v(&p.add_v(v))).collect();
+    let clip_vertices: Vec<Vector4<f32>> = vertices.iter().map(|v| m.mul_v(&p.add_v(v))).collect();
 
     if clip_vertices.iter().all(|v| v.x < -v.w) {
         return true;
@@ -356,7 +383,7 @@ fn view_frustum_cull(m : &Mat4<f32>, p: &Vec4<f32>) -> bool {
     return false;
 }
 
-fn face_visible(face : &mesh::Face, a: Vec3<i64>, b: Vec3<i64>) -> bool {
+fn face_visible(face : &mesh::Face, a: Vector3<i64>, b: Vector3<i64>) -> bool {
     let dp = b.sub_v(&a);
 
     match face.index {
@@ -370,12 +397,12 @@ fn face_visible(face : &mesh::Face, a: Vec3<i64>, b: Vec3<i64>) -> bool {
     }
 }
 
-fn compile_shader(src: &[u8], ty: GLenum) -> Result<GLuint,~str> {
+fn compile_shader(src: &[u8], ty: GLenum) -> Result<GLuint, String> {
     let shader = gl::CreateShader(ty);
     unsafe {
         // Attempt to compile the shader
         let length = src.len() as GLint;
-        let ptr : *i8 = std::cast::transmute(src.unsafe_ref(0));
+        let ptr : *const i8 = std::mem::transmute(src.unsafe_ref(0));
         gl::ShaderSource(shader, 1, &ptr, &length);
         gl::CompileShader(shader);
 
@@ -395,7 +422,7 @@ fn compile_shader(src: &[u8], ty: GLenum) -> Result<GLuint,~str> {
     Ok(shader)
 }
 
-fn link_program(vs: GLuint, fs: GLuint) -> Result<GLuint, ~str> {
+fn link_program(vs: GLuint, fs: GLuint) -> Result<GLuint, String> {
     let program = gl::CreateProgram();
     gl::AttachShader(program, vs);
     gl::AttachShader(program, fs);

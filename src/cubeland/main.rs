@@ -32,8 +32,8 @@ use glfw::Context;
 
 use cgmath::matrix::Matrix;
 use cgmath::vector::Vector;
-use cgmath::vector::Vec2;
-use cgmath::vector::Vec3;
+use cgmath::vector::Vector2;
+use cgmath::vector::Vector3;
 
 use chunk::Chunk;
 use chunk::ChunkLoader;
@@ -53,19 +53,20 @@ mod terrain;
 mod mesh;
 
 pub static VISIBLE_RADIUS: uint = 8;
-pub static CHUNK_SIZE: int = 32;
+pub static CHUNK_SIZEu: uint = 32;
+pub static CHUNK_SIZE: int = CHUNK_SIZEu as int;
 pub static WORLD_SEED: u32 = 42;
 
-static DEFAULT_WINDOW_SIZE : Vec2<u32> = Vec2 { x: 800, y: 600 };
+static DEFAULT_WINDOW_SIZE : Vector2<u32> = Vector2 { x: 800, y: 600 };
 
 #[start]
-fn start(argc: int, argv: **u8) -> int {
+fn start(argc: int, argv: *const *const u8) -> int {
     native::start(argc, argv, main)
 }
 
 fn main() {
-   let (glfw, errors) = glfw::init().unwrap();
-   glfw::fail_on_error(&errors);
+   let c: Option<glfw::ErrorCallback<()>> = None;
+   let glfw = glfw::init(c).unwrap();
 
    if true {
         glfw.window_hint(glfw::Samples(8));
@@ -87,10 +88,10 @@ fn main() {
 
         let mut chunk_loader = ChunkLoader::new(WORLD_SEED);
 
-        let mut camera = camera::Camera::new(Vec3::new(0.0, 20.0, 00.0));
+        let mut camera = camera::Camera::new(Vector3::new(0.0, 20.0, 00.0));
 
         let mut fps_display_limiter = ratelimiter::RateLimiter::new(1000*1000*1000);
-        let mut fps_frame_counter = 0;
+        let mut fps_frame_counter: uint = 0;
 
         let mut last_tick = precise_time_ns();
 
@@ -109,38 +110,37 @@ fn main() {
 
         while !window.should_close() {
             glfw.poll_events();
-            glfw::fail_on_error(&errors);
             for (_, event) in glfw::flush_messages(&events) {
                 match event {
                     glfw::FramebufferSizeEvent(w, h) => {
-                        renderer.set_window_size(Vec2 { x: w as u32, y: h as u32 });
+                        renderer.set_window_size(Vector2 { x: w as u32, y: h as u32 });
                     },
                     glfw::KeyEvent(key, _, action, _) => {
                         match (action, key) {
                             // Camera movement
                             (glfw::Press, glfw::KeyW) |
                             (glfw::Release, glfw::KeyS) => {
-                                camera.accelerate(Vec3::new(0.0, 0.0, -1.0));
+                                camera.accelerate(Vector3::new(0.0, 0.0, -1.0));
                             },
                             (glfw::Press, glfw::KeyS) |
                             (glfw::Release, glfw::KeyW) => {
-                                camera.accelerate(Vec3::new(0.0, 0.0, 1.0));
+                                camera.accelerate(Vector3::new(0.0, 0.0, 1.0));
                             },
                             (glfw::Press, glfw::KeyA) |
                             (glfw::Release, glfw::KeyD) => {
-                                camera.accelerate(Vec3::new(-1.0, 0.0, 0.0));
+                                camera.accelerate(Vector3::new(-1.0, 0.0, 0.0));
                             },
                             (glfw::Press, glfw::KeyD) |
                             (glfw::Release, glfw::KeyA) => {
-                                camera.accelerate(Vec3::new(1.0, 0.0, 0.0));
+                                camera.accelerate(Vector3::new(1.0, 0.0, 0.0));
                             },
                             (glfw::Press, glfw::KeyLeftControl) |
                             (glfw::Release, glfw::KeySpace) => {
-                                camera.accelerate(Vec3::new(0.0, -1.0, 0.0));
+                                camera.accelerate(Vector3::new(0.0, -1.0, 0.0));
                             },
                             (glfw::Press, glfw::KeySpace) |
                             (glfw::Release, glfw::KeyLeftControl) => {
-                                camera.accelerate(Vec3::new(0.0, 1.0, 0.0));
+                                camera.accelerate(Vector3::new(0.0, 1.0, 0.0));
                             },
                             (glfw::Press, glfw::KeyLeftShift) => camera.fast(true),
                             (glfw::Release, glfw::KeyLeftShift) => camera.fast(false),
@@ -171,7 +171,7 @@ fn main() {
 
             if grabbed {
                 let (cursor_x, cursor_y) = window.get_cursor_pos();
-                camera.look(Vec2 { x: cursor_x, y: cursor_y });
+                camera.look(Vector2 { x: cursor_x, y: cursor_y });
             }
 
             let now = precise_time_ns();
@@ -184,8 +184,8 @@ fn main() {
                 let chunks = find_nearby_chunks(&chunk_loader, camera.position);
 
                 renderer.render(
-                    chunks,
-                    Vec3 { x: camera.position.x as f32, y: camera.position.y as f32, z: camera.position.z as f32 },
+                    chunks.slice(0, chunks.len()),
+                    Vector3 { x: camera.position.x as f32, y: camera.position.y as f32, z: camera.position.z as f32 },
                     camera.angle)
             }
 
@@ -205,16 +205,16 @@ fn main() {
     }
 }
 
-fn nearby_chunk_coords(p: Vec3<f64>) -> ~[Vec3<i64>] {
-    let cur_chunk_coord = Vec3::new(p.x as i64, p.y as i64, p.z as i64).div_s(CHUNK_SIZE as i64);
+fn nearby_chunk_coords(p: Vector3<f64>) -> Vec<Vector3<i64>> {
+    let cur_chunk_coord = Vector3::new(p.x as i64, p.y as i64, p.z as i64).div_s(CHUNK_SIZE as i64);
     let r = VISIBLE_RADIUS as i64;
 
-    let mut coords = ~[];
+    let mut coords = Vec::new();
 
     for x in range(-r, r+1) {
         for y in range(-r, r+1) {
             for z in range(-r, r+1) {
-                let c = Vec3::new(x, y, z);
+                let c = Vector3::new(x, y, z);
                 if c.dot(&c) < r*r {
                     coords.push(c);
                 }
@@ -231,27 +231,27 @@ fn nearby_chunk_coords(p: Vec3<f64>) -> ~[Vec3<i64>] {
     coords
 }
 
-fn find_nearby_chunks<'a>(chunk_loader: &'a ChunkLoader, p: Vec3<f64>) -> ~[&'a ~Chunk] {
+fn find_nearby_chunks<'a>(chunk_loader: &'a ChunkLoader, p: Vector3<f64>) -> Vec<&'a Box<Chunk>> {
     let coords = nearby_chunk_coords(p);
     coords.iter().
         filter_map(|&c| chunk_loader.get(c)).
         collect()
 }
 
-fn request_nearby_chunks(chunk_loader: &mut ChunkLoader, p: Vec3<f64>) {
+fn request_nearby_chunks(chunk_loader: &mut ChunkLoader, p: Vector3<f64>) {
     let coords = nearby_chunk_coords(p);
-    chunk_loader.request(coords);
+    chunk_loader.request(coords.slice(0, coords.len()));
 }
 
 extern "C" {
-    fn gluErrorString(error: GLenum) -> *GLubyte;
+    fn gluErrorString(error: GLenum) -> *const GLubyte;
 }
 
 fn check_gl(message : &str) {
     let err = gl::GetError();
     if err != gl::NO_ERROR {
         unsafe {
-            let err = std::str::raw::from_c_str(gluErrorString(err) as *i8);
+            let err = std::str::raw::from_c_str(gluErrorString(err) as *const i8);
             fail!("GL error {} at {}", err, message);
         }
     }

@@ -22,7 +22,7 @@ extern crate noise;
 use time::precise_time_ns;
 
 use cgmath::vector::Vector;
-use cgmath::vector::Vec3;
+use cgmath::vector::Vector3;
 
 use terrain::TerrainGenerator;
 
@@ -37,9 +37,9 @@ fn main() {
     let mut times = ~[];
     let terrain_generator = TerrainGenerator::new(WORLD_SEED);
 
-    let camera_position = Vec3::new(0.0, 0.0, 0.0);
+    let camera_position = Vector3::new(0.0, 0.0, 0.0);
     for &c in nearby_chunk_coords(camera_position).iter() {
-        let p = Vec3::new(c.x as f64, c.y as f64, c.z as f64).mul_s(CHUNK_SIZE as f64);
+        let p = Vector3::new(c.x as f64, c.y as f64, c.z as f64).mul_s(CHUNK_SIZE as f64);
         let start_time = precise_time_ns();
         terrain_generator.gen(p);
         let end_time = precise_time_ns();
@@ -54,8 +54,8 @@ fn main() {
     println!("maximum : {}us", times[times.len()-1]);
 }
 
-fn nearby_chunk_coords(p: Vec3<f64>) -> ~[Vec3<i64>] {
-    let cur_chunk_coord = Vec3::new(p.x as i64, p.y as i64, p.z as i64).div_s(CHUNK_SIZE as i64);
+fn nearby_chunk_coords(p: Vector3<f64>) -> ~[Vector3<i64>] {
+    let cur_chunk_coord = Vector3::new(p.x as i64, p.y as i64, p.z as i64).div_s(CHUNK_SIZE as i64);
     let r = VISIBLE_RADIUS as i64;
 
     let mut coords = ~[];
@@ -63,7 +63,7 @@ fn nearby_chunk_coords(p: Vec3<f64>) -> ~[Vec3<i64>] {
     for x in range(-r, r+1) {
         for y in range(-r, r+1) {
             for z in range(-r, r+1) {
-                let c = Vec3::new(x, y, z);
+                let c = Vector3::new(x, y, z);
                 if c.dot(&c) < r*r {
                     coords.push(c);
                 }

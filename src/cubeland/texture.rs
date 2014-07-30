@@ -16,10 +16,10 @@ extern crate gl;
 extern crate cgmath;
 extern crate noise;
 
-use std::cast;
 use time::precise_time_ns;
 
 use gl::types::*;
+use std::mem;
 
 use noise::sources::Perlin;
 use noise::Source;
@@ -27,7 +27,7 @@ use noise::Source;
 pub fn make_noise_texture() -> GLuint {
     let start_time = precise_time_ns();
 
-    let mut pixels : ~[u8] = ~[];
+    let mut pixels : Vec<u8> = Vec::new();
     static length : i32 = 128;
     let perlin = Perlin {
         seed: 7,
@@ -62,7 +62,7 @@ pub fn make_noise_texture() -> GLuint {
             1 as GLint,
             length, length, 0,
             gl::RED, gl::UNSIGNED_BYTE,
-            cast::transmute(&pixels[0]));
+            mem::transmute(&pixels[0]));
     }
 
     gl::GenerateMipmap(gl::TEXTURE_2D);

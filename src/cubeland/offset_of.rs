@@ -17,8 +17,8 @@
 macro_rules! offset_of(
     ($typename:ty, $fieldname:ident) => (
         {
-            let ptr = std::cast::transmute::<*$typename, &$typename>(std::ptr::null::<$typename>());
-            let offset : uint = std::cast::transmute(&ptr.$fieldname);
+            let ptr = std::mem::transmute::<*const $typename, &$typename>(std::ptr::null::<$typename>());
+            let offset : uint = std::mem::transmute(&ptr.$fieldname);
             offset
         }
     );

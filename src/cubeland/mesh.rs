@@ -22,7 +22,7 @@ use collections::bitv::BitvSet;
 use gl::types::*;
 
 use cgmath::vector::Vector;
-use cgmath::vector::Vec3;
+use cgmath::vector::Vector3;
 
 use CHUNK_SIZE;
 use terrain::Terrain;
@@ -32,31 +32,31 @@ static NUM_FACES : uint = 6;
 
 // Layout of the vertex buffer sent to the GPU
 pub struct VertexData {
-    position : Vec3<f32>,
-    blocktype : f32,
+    pub position : Vector3<f32>,
+    pub blocktype : f32,
 }
 
 pub struct Face {
-    index: uint,
-    normal: Vec3<f32>,
-    di: Vec3<int>,
-    dj: Vec3<int>,
-    dk: Vec3<int>,
-    vertices: [Vec3<f32>, ..4],
+    pub index: uint,
+    pub normal: Vector3<f32>,
+    di: Vector3<int>,
+    dj: Vector3<int>,
+    dk: Vector3<int>,
+    pub vertices: [Vector3<f32>, ..4],
 }
 
 pub struct Mesh {
-    vertex_buffer: Option<hgl::Vbo>,
-    element_buffer: Option<hgl::Ebo>,
-    vertices: ~[VertexData],
-    elements: ~[GLuint],
-    face_ranges: [(uint, uint), ..NUM_FACES],
+    pub vertex_buffer: Option<hgl::Vbo>,
+    pub element_buffer: Option<hgl::Ebo>,
+    pub vertices: Vec<VertexData>,
+    pub elements: Vec<GLuint>,
+    pub face_ranges: [(uint, uint), ..NUM_FACES],
 }
 
 impl Mesh {
-    pub fn gen(t: &Terrain) -> ~Mesh {
-        let mut vertices : ~[VertexData] = ~[];
-        let mut elements : ~[GLuint] = ~[];
+    pub fn gen(t: &Terrain) -> Box<Mesh> {
+        let mut vertices : Vec<VertexData> = Vec::new();
+        let mut elements : Vec<GLuint> = Vec::new();
 
         static expected_vertices : uint = 8000;
         static expected_elements : uint = expected_vertices * 3 / 2;
@@ -68,7 +68,7 @@ impl Mesh {
         for face in faces.iter() {
             let num_elements_start = elements.len();
 
-            let face_normal_int = Vec3 { x: face.normal.x as int, y: face.normal.y as int, z: face.normal.z as int };
+            let face_normal_int = Vector3 { x: face.normal.x as int, y: face.normal.y as int, z: face.normal.z as int };
 
             let mut unmeshed_faces = BlockBitmap::new();
             for x in std::iter::range(0, CHUNK_SIZE as int) {
@@ -97,21 +97,21 @@ impl Mesh {
             for i in std::iter::range(0, CHUNK_SIZE as int) {
                 for j in std::iter::range(0, CHUNK_SIZE as int) {
                     for k in std::iter::range(0, CHUNK_SIZE as int) {
-                        let Vec3 { x: x, y: y, z: z } = face.di.mul_s(i).add_v(&face.dj.mul_s(j)).add_v(&face.dk.mul_s(k));
+                        let Vector3 { x: x, y: y, z: z } = face.di.mul_s(i).add_v(&face.dj.mul_s(j)).add_v(&face.dk.mul_s(k));
                         let block = &t.get(x, y, z);
 
                         if !unmeshed_faces.contains(x, y, z) {
                             continue;
                         }
 
-                        let block_position = Vec3 {
+                        let block_position = Vector3 {
                             x: x as f32,
                             y: y as f32,
                             z: z as f32,
                         };
 
-                        let dim = expand_face(t, &unmeshed_faces, face, Vec3 { x: x, y: y, z: z });
-                        let dim_f = Vec3 { x: dim.x as f32, y: dim.y as f32, z: dim.z as f32 };
+                        let dim = expand_face(t, &unmeshed_faces, face, Vector3 { x: x, y: y, z: z });
+                        let dim_f = Vector3 { x: dim.x as f32, y: dim.y as f32, z: dim.z as f32 };
 
                         for dx in range(0, dim.x) {
                             for dy in range(0, dim.y) {
@@ -125,7 +125,7 @@ impl Mesh {
                         for v in face.vertices.iter() {
                             vertices.push(VertexData {
                                 position: v.mul_v(&dim_f).add_v(&block_position),
-                                blocktype: block.blocktype as f32,
+                                blocktype: block.blocktype as u8 as f32,
                             });
                         }
 
@@ -139,7 +139,7 @@ impl Mesh {
             face_ranges[face.index] = (num_elements_start, elements.len() - num_elements_start);
         }
 
-        ~Mesh {
+        box Mesh {
             vertex_buffer: None,
             element_buffer: None,
             vertices: vertices,
@@ -150,8 +150,8 @@ impl Mesh {
 
     pub fn finish(&mut self) {
         if !self.elements.is_empty() {
-            self.vertex_buffer = Some(hgl::Vbo::from_data(self.vertices, hgl::StaticDraw));
-            self.element_buffer = Some(hgl::Ebo::from_indices(self.elements));
+            self.vertex_buffer = Some(hgl::Vbo::from_data(self.vertices.slice(0, self.vertices.len()), hgl::StaticDraw));
+            self.element_buffer = Some(hgl::Ebo::from_indices(self.elements.slice(0, self.elements.len())));
         }
 
         self.vertices.clear();
@@ -162,24 +162,24 @@ impl Mesh {
 fn expand_face(t : &Terrain,
                unmeshed_faces : &BlockBitmap,
                face: &Face,
-               p: Vec3<int>) -> Vec3<int> {
+               p: Vector3<int>) -> Vector3<int> {
 
     let len_k = run_length(t, unmeshed_faces, p, face.dk);
     let len_j = range(0, len_k).
         map(|k| run_length(t, unmeshed_faces, p.add_v(&face.dk.mul_s(k)), face.dj)).
         min().unwrap();
 
-    (Vec3 { x: 1, y: 1, z: 1 }).
+    (Vector3 { x: 1, y: 1, z: 1 }).
         add_v(&face.dk.mul_s(len_k - 1)).
         add_v(&face.dj.mul_s(len_j - 1))
 }
 
 fn run_length(t : &Terrain,
               unmeshed_faces : &BlockBitmap,
-              mut p: Vec3<int>,
-              dp: Vec3<int>) -> int {
+              mut p: Vector3<int>,
+              dp: Vector3<int>) -> int {
     let block = &t.get(p.x, p.y, p.z);
-    let max_len = Vec3::new(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE).sub_v(&p).dot(&dp);
+    let max_len = Vector3::new(CHUNK_SIZE as int, CHUNK_SIZE as int, CHUNK_SIZE as int).sub_v(&p).dot(&dp);
 
     let mut len = 1;
 
@@ -225,7 +225,7 @@ impl BlockBitmap {
     }
 
     fn index(x: int, y: int, z: int) -> uint {
-        (x*CHUNK_SIZE*CHUNK_SIZE + y*CHUNK_SIZE + z) as uint
+        (x*CHUNK_SIZE as int*CHUNK_SIZE as int + y*CHUNK_SIZE as int + z) as uint
     }
 }
 
@@ -237,90 +237,90 @@ pub static faces : [Face, ..NUM_FACES] = [
     /* front */
     Face {
         index: 0,
-        normal: Vec3 { x: 0.0, y: 0.0, z: 1.0 },
-        di: Vec3 { x: 0, y: 0, z: 1 },
-        dj: Vec3 { x: 1, y: 0, z: 0 },
-        dk: Vec3 { x: 0, y: 1, z: 0 },
+        normal: Vector3 { x: 0.0, y: 0.0, z: 1.0 },
+        di: Vector3 { x: 0, y: 0, z: 1 },
+        dj: Vector3 { x: 1, y: 0, z: 0 },
+        dk: Vector3 { x: 0, y: 1, z: 0 },
         vertices: [
-            Vec3 { x: 0.0, y: 0.0, z: 1.0 }, /* bottom left */
-            Vec3 { x: 1.0, y: 0.0, z: 1.0 },  /* bottom right */
-            Vec3 { x: 0.0, y: 1.0, z: 1.0 }, /* top left */
-            Vec3 { x: 1.0, y: 1.0, z: 1.0 },  /* top right */
+            Vector3 { x: 0.0, y: 0.0, z: 1.0 }, /* bottom left */
+            Vector3 { x: 1.0, y: 0.0, z: 1.0 },  /* bottom right */
+            Vector3 { x: 0.0, y: 1.0, z: 1.0 }, /* top left */
+            Vector3 { x: 1.0, y: 1.0, z: 1.0 },  /* top right */
         ],
     },
 
     /* back */
     Face {
         index: 1,
-        normal: Vec3 { x: 0.0, y: 0.0, z: -1.0 },
-        di: Vec3 { x: 0, y: 0, z: 1 },
-        dj: Vec3 { x: 1, y: 0, z: 0 },
-        dk: Vec3 { x: 0, y: 1, z: 0 },
+        normal: Vector3 { x: 0.0, y: 0.0, z: -1.0 },
+        di: Vector3 { x: 0, y: 0, z: 1 },
+        dj: Vector3 { x: 1, y: 0, z: 0 },
+        dk: Vector3 { x: 0, y: 1, z: 0 },
         vertices: [
-            Vec3 { x: 1.0, y: 0.0, z: 0.0 }, /* bottom right */
-            Vec3 { x: 0.0, y: 0.0, z: 0.0 },  /* bottom left */
-            Vec3 { x: 1.0, y: 1.0, z: 0.0 }, /* top right */
-            Vec3 { x: 0.0, y: 1.0, z: 0.0 },  /* top left */
+            Vector3 { x: 1.0, y: 0.0, z: 0.0 }, /* bottom right */
+            Vector3 { x: 0.0, y: 0.0, z: 0.0 },  /* bottom left */
+            Vector3 { x: 1.0, y: 1.0, z: 0.0 }, /* top right */
+            Vector3 { x: 0.0, y: 1.0, z: 0.0 },  /* top left */
         ],
     },
 
     /* right */
     Face {
         index: 2,
-        normal: Vec3 { x: 1.0, y: 0.0, z: 0.0 },
-        di: Vec3 { x: 1, y: 0, z: 0 },
-        dj: Vec3 { x: 0, y: 1, z: 0 },
-        dk: Vec3 { x: 0, y: 0, z: 1 },
+        normal: Vector3 { x: 1.0, y: 0.0, z: 0.0 },
+        di: Vector3 { x: 1, y: 0, z: 0 },
+        dj: Vector3 { x: 0, y: 1, z: 0 },
+        dk: Vector3 { x: 0, y: 0, z: 1 },
         vertices: [
-            Vec3 { x: 1.0, y: 0.0, z: 1.0 }, /* bottom front */
-            Vec3 { x: 1.0, y: 0.0, z: 0.0 }, /* bottom back */
-            Vec3 { x: 1.0, y: 1.0, z: 1.0 }, /* top front */
-            Vec3 { x: 1.0, y: 1.0, z: 0.0 }, /* top back */
+            Vector3 { x: 1.0, y: 0.0, z: 1.0 }, /* bottom front */
+            Vector3 { x: 1.0, y: 0.0, z: 0.0 }, /* bottom back */
+            Vector3 { x: 1.0, y: 1.0, z: 1.0 }, /* top front */
+            Vector3 { x: 1.0, y: 1.0, z: 0.0 }, /* top back */
         ],
     },
 
     /* left */
     Face {
         index: 3,
-        normal: Vec3 { x: -1.0, y: 0.0, z: 0.0 },
-        di: Vec3 { x: 1, y: 0, z: 0 },
-        dj: Vec3 { x: 0, y: 1, z: 0 },
-        dk: Vec3 { x: 0, y: 0, z: 1 },
+        normal: Vector3 { x: -1.0, y: 0.0, z: 0.0 },
+        di: Vector3 { x: 1, y: 0, z: 0 },
+        dj: Vector3 { x: 0, y: 1, z: 0 },
+        dk: Vector3 { x: 0, y: 0, z: 1 },
         vertices: [
-            Vec3 { x: 0.0, y: 0.0, z: 0.0 }, /* bottom back */
-            Vec3 { x: 0.0, y: 0.0, z: 1.0 }, /* bottom front */
-            Vec3 { x: 0.0, y: 1.0, z: 0.0 }, /* top back */
-            Vec3 { x: 0.0, y: 1.0, z: 1.0 }, /* top front */
+            Vector3 { x: 0.0, y: 0.0, z: 0.0 }, /* bottom back */
+            Vector3 { x: 0.0, y: 0.0, z: 1.0 }, /* bottom front */
+            Vector3 { x: 0.0, y: 1.0, z: 0.0 }, /* top back */
+            Vector3 { x: 0.0, y: 1.0, z: 1.0 }, /* top front */
         ],
     },
 
     /* top */
     Face {
         index: 4,
-        normal: Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-        di: Vec3 { x: 0, y: 1, z: 0 },
-        dj: Vec3 { x: 1, y: 0, z: 0 },
-        dk: Vec3 { x: 0, y: 0, z: 1 },
+        normal: Vector3 { x: 0.0, y: 1.0, z: 0.0 },
+        di: Vector3 { x: 0, y: 1, z: 0 },
+        dj: Vector3 { x: 1, y: 0, z: 0 },
+        dk: Vector3 { x: 0, y: 0, z: 1 },
         vertices: [
-            Vec3 { x: 0.0, y: 1.0, z: 1.0 }, /* front left */
-            Vec3 { x: 1.0, y: 1.0, z: 1.0 }, /* front right */
-            Vec3 { x: 0.0, y: 1.0, z: 0.0 }, /* back left */
-            Vec3 { x: 1.0, y: 1.0, z: 0.0 }, /* back right */
+            Vector3 { x: 0.0, y: 1.0, z: 1.0 }, /* front left */
+            Vector3 { x: 1.0, y: 1.0, z: 1.0 }, /* front right */
+            Vector3 { x: 0.0, y: 1.0, z: 0.0 }, /* back left */
+            Vector3 { x: 1.0, y: 1.0, z: 0.0 }, /* back right */
         ],
     },
 
     /* bottom */
     Face {
         index: 5,
-        normal: Vec3 { x: 0.0, y: -1.0, z: 0.0 },
-        di: Vec3 { x: 0, y: 1, z: 0 },
-        dj: Vec3 { x: 1, y: 0, z: 0 },
-        dk: Vec3 { x: 0, y: 0, z: 1 },
+        normal: Vector3 { x: 0.0, y: -1.0, z: 0.0 },
+        di: Vector3 { x: 0, y: 1, z: 0 },
+        dj: Vector3 { x: 1, y: 0, z: 0 },
+        dk: Vector3 { x: 0, y: 0, z: 1 },
         vertices: [
-            Vec3 { x: 0.0, y: 0.0, z: 0.0 }, /* back left */
-            Vec3 { x: 1.0, y: 0.0, z: 0.0 }, /* back right */
-            Vec3 { x: 0.0, y: 0.0, z: 1.0 }, /* front left */
-            Vec3 { x: 1.0, y: 0.0, z: 1.0 }, /* front right */
+            Vector3 { x: 0.0, y: 0.0, z: 0.0 }, /* back left */
+            Vector3 { x: 1.0, y: 0.0, z: 0.0 }, /* back right */
+            Vector3 { x: 0.0, y: 0.0, z: 1.0 }, /* front left */
+            Vector3 { x: 1.0, y: 0.0, z: 1.0 }, /* front right */
         ],
     },
 ];

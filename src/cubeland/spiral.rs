@@ -15,7 +15,7 @@
 extern crate cgmath;
 
 use cgmath::vector::Vector;
-use cgmath::vector::Vec2;
+use cgmath::vector::Vector2;
 
 use std::num::{One, Zero};
 
@@ -36,8 +36,8 @@ use std::num::{One, Zero};
 /// |           |
 /// 4-3-2-1-0-F-E
 pub struct Spiral<A> {
-    next : Vec2<A>,
-    dir : Vec2<A>,
+    next : Vector2<A>,
+    dir : Vector2<A>,
     pos : uint,
     length : uint,
     segment : uint,
@@ -48,8 +48,8 @@ pub struct Spiral<A> {
 impl<A: Clone + Zero + One + Primitive> Spiral<A> {
     pub fn new(end: uint) -> Spiral<A> {
         Spiral {
-            next: Vec2::new(Zero::zero(), Zero::zero()),
-            dir: Vec2::new(One::one(), Zero::zero()),
+            next: Vector2::new(Zero::zero(), Zero::zero()),
+            dir: Vector2::new(One::one(), Zero::zero()),
             pos: 0,
             length: 1,
             segment: 2,
@@ -59,8 +59,8 @@ impl<A: Clone + Zero + One + Primitive> Spiral<A> {
     }
 }
 
-impl<A: Add<A, A> + Neg<A> + One + Zero + Eq + Clone + Primitive> Iterator<Vec2<A>> for Spiral<A> {
-    fn next(&mut self) -> Option<Vec2<A>> {
+impl<A: Add<A, A> + Neg<A> + One + Zero + Eq + Clone + Primitive> Iterator<Vector2<A>> for Spiral<A> {
+    fn next(&mut self) -> Option<Vector2<A>> {
         if self.count == self.end {
             None
         } else {
@@ -75,7 +75,7 @@ impl<A: Add<A, A> + Neg<A> + One + Zero + Eq + Clone + Primitive> Iterator<Vec2<
                     self.segment = 2;
                 }
                 self.pos = 0;
-                self.dir = Vec2 { x: self.dir.y.clone(), y: -self.dir.x.clone() };
+                self.dir = Vector2 { x: self.dir.y.clone(), y: -self.dir.x.clone() };
             }
             Some(ret)
         }
@@ -84,15 +84,15 @@ impl<A: Add<A, A> + Neg<A> + One + Zero + Eq + Clone + Primitive> Iterator<Vec2<
 #[test]
 fn test_spiral() {
     let mut spiral = Spiral::new(10);
-    assert_eq!(spiral.next(), Some(Vec2::new(0, 0)));
-    assert_eq!(spiral.next(), Some(Vec2::new(1, 0)));
-    assert_eq!(spiral.next(), Some(Vec2::new(1, -1)));
-    assert_eq!(spiral.next(), Some(Vec2::new(0, -1)));
-    assert_eq!(spiral.next(), Some(Vec2::new(-1, -1)));
-    assert_eq!(spiral.next(), Some(Vec2::new(-1, 0)));
-    assert_eq!(spiral.next(), Some(Vec2::new(-1, 1)));
-    assert_eq!(spiral.next(), Some(Vec2::new(0, 1)));
-    assert_eq!(spiral.next(), Some(Vec2::new(1, 1)));
-    assert_eq!(spiral.next(), Some(Vec2::new(2, 1)));
+    assert_eq!(spiral.next(), Some(Vector2::new(0, 0)));
+    assert_eq!(spiral.next(), Some(Vector2::new(1, 0)));
+    assert_eq!(spiral.next(), Some(Vector2::new(1, -1)));
+    assert_eq!(spiral.next(), Some(Vector2::new(0, -1)));
+    assert_eq!(spiral.next(), Some(Vector2::new(-1, -1)));
+    assert_eq!(spiral.next(), Some(Vector2::new(-1, 0)));
+    assert_eq!(spiral.next(), Some(Vector2::new(-1, 1)));
+    assert_eq!(spiral.next(), Some(Vector2::new(0, 1)));
+    assert_eq!(spiral.next(), Some(Vector2::new(1, 1)));
+    assert_eq!(spiral.next(), Some(Vector2::new(2, 1)));
     assert_eq!(spiral.next(), None);
 }
